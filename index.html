@@ -572,8 +572,7 @@ animateBg(0);
    GAME STATE
 ───────────────────────────── */
 const TARGET = 12000; // ms
-const SUCCESS_WINDOW = 300; // ±0.3s = success (tight!)
-const GOOD_WINDOW = 700;    // ±0.7s = close but not perfect
+// 성공 조건: 화면에 12.00이 표시될 때 (12.000 ~ 12.009초)
 
 let state = 'idle'; // idle | countdown | playing | result
 let startTime = null;
@@ -706,7 +705,10 @@ function showResult(ms) {
   const timeStr = (ms / 1000).toFixed(3) + '초';
   const diffStr = (diff > 0 ? '+' : '') + (diff / 1000).toFixed(3) + '초';
 
-  const isSuccess = absDiff <= SUCCESS_WINDOW;
+  // 화면에 표시되는 값이 12.00일 때만 성공 (Math.floor 기준)
+  const dispSec = Math.floor(ms / 1000);
+  const dispCs  = Math.floor((ms % 1000) / 10);
+  const isSuccess = dispSec === 12 && dispCs === 0;
 
   history.push(isSuccess ? 'win' : 'lose');
   updateHistory();
