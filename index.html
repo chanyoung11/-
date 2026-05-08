@@ -107,32 +107,39 @@
 
     /* ── PLAYING SCREEN ── */
     #screen-playing .big-label {
-      font-size: clamp(1.5rem, 4vw, 2.5rem);
-      color: rgba(255,255,255,0.4);
+      font-size: clamp(1rem, 2.5vw, 1.6rem);
+      color: rgba(255,255,255,0.35);
       letter-spacing: 4px;
       text-transform: uppercase;
-      margin-bottom: 1.5rem;
+      margin-bottom: 0.8rem;
     }
 
-    #screen-playing .target-time {
-      font-size: clamp(5rem, 18vw, 14rem);
+    #live-timer {
+      font-size: clamp(5rem, 20vw, 15rem);
       font-weight: 900;
       line-height: 1;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -2px;
       background: linear-gradient(135deg, var(--accent), #7b61ff);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      filter: blur(0px);
+    }
+
+    #live-timer .ms-part {
+      font-size: 0.45em;
+      opacity: 0.75;
     }
 
     #screen-playing .target-unit {
-      font-size: clamp(1.5rem, 4vw, 2.5rem);
-      color: rgba(255,255,255,0.4);
-      margin-top: 0.5rem;
+      font-size: clamp(1.2rem, 3vw, 2rem);
+      color: rgba(255,255,255,0.3);
+      margin-top: 0.3rem;
+      letter-spacing: 2px;
     }
 
     #screen-playing .stop-hint {
-      margin-top: 3rem;
+      margin-top: 2rem;
       font-size: clamp(1rem, 2.5vw, 1.4rem);
       color: rgba(255,255,255,0.5);
       animation: blink 1s step-start infinite;
@@ -329,8 +336,8 @@
           stroke-dasharray="553" stroke-dashoffset="553"/>
       </svg>
     </div>
-    <div class="big-label">목표 시간</div>
-    <div class="target-time">12</div>
+    <div class="big-label">목표 시간 — 12.00초</div>
+    <div id="live-timer"><span id="sec-part">00</span><span class="ms-part">.<span id="ms-part">00</span></span></div>
     <div class="target-unit">초</div>
     <div class="stop-hint">SPACE 를 눌러 멈추세요</div>
   </div>
@@ -640,19 +647,30 @@ function startGame() {
   startTime = performance.now();
   showScreen('playing');
   ringFg.style.strokeDashoffset = CIRCUMFERENCE;
+  document.getElementById('sec-part').textContent = '00';
+  document.getElementById('ms-part').textContent  = '00';
   playStart();
 
+  const secEl = document.getElementById('sec-part');
+  const msEl  = document.getElementById('ms-part');
   let lastTick = 0;
+
   tickInterval = setInterval(() => {
     const elapsed = performance.now() - startTime;
     updateRing(elapsed);
 
-    const sec = Math.floor(elapsed / 1000);
-    if (sec !== lastTick) {
-      lastTick = sec;
+    // live timer display
+    const totalSec = elapsed / 1000;
+    const s  = Math.floor(totalSec);
+    const cs = Math.floor((totalSec - s) * 100); // centiseconds 00-99
+    secEl.textContent = String(s).padStart(2, '0');
+    msEl.textContent  = String(cs).padStart(2, '0');
+
+    if (s !== lastTick) {
+      lastTick = s;
       playTick();
     }
-  }, 50);
+  }, 16);
 }
 
 function stopGame() {
