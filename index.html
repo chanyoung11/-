@@ -120,15 +120,26 @@
       line-height: 1;
       font-variant-numeric: tabular-nums;
       letter-spacing: -2px;
-      background: linear-gradient(135deg, var(--accent), #7b61ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--accent);
+      text-shadow: 0 0 60px rgba(0,245,255,0.4), 0 0 120px rgba(0,245,255,0.15);
+      display: flex;
+      align-items: baseline;
+      gap: 0.02em;
     }
 
-    #live-timer .ms-part {
-      font-size: 0.45em;
-      opacity: 0.75;
+    #timer-sec {
+      display: inline-block;
+    }
+
+    #timer-dot {
+      color: rgba(0,245,255,0.5);
+      font-size: 0.7em;
+    }
+
+    #timer-cs {
+      font-size: 0.55em;
+      color: rgba(0,245,255,0.9);
+      min-width: 2ch;
     }
 
     #screen-playing .target-unit {
@@ -337,7 +348,7 @@
       </svg>
     </div>
     <div class="big-label">목표 시간 — 12.00초</div>
-    <div id="live-timer"><span id="sec-part">00</span><span class="ms-part">.<span id="ms-part">00</span></span></div>
+    <div id="live-timer"><span id="timer-sec">00</span><span id="timer-dot">.</span><span id="timer-cs">00</span></div>
     <div class="target-unit">초</div>
     <div class="stop-hint">SPACE 를 눌러 멈추세요</div>
   </div>
@@ -647,36 +658,40 @@ function startGame() {
   startTime = performance.now();
   showScreen('playing');
   ringFg.style.strokeDashoffset = CIRCUMFERENCE;
-  document.getElementById('sec-part').textContent = '00';
-  document.getElementById('ms-part').textContent  = '00';
+  document.getElementById('timer-sec').textContent = '00';
+  document.getElementById('timer-cs').textContent  = '00';
   playStart();
 
-  const secEl = document.getElementById('sec-part');
-  const msEl  = document.getElementById('ms-part');
+  const secEl = document.getElementById('timer-sec');
+  const csEl  = document.getElementById('timer-cs');
   let lastTick = 0;
+  let rafId = null;
 
-  tickInterval = setInterval(() => {
+  function timerLoop() {
+    if (state !== 'playing') return;
     const elapsed = performance.now() - startTime;
     updateRing(elapsed);
 
-    // live timer display
     const totalSec = elapsed / 1000;
     const s  = Math.floor(totalSec);
-    const cs = Math.floor((totalSec - s) * 100); // centiseconds 00-99
+    const cs = Math.floor((totalSec - s) * 100);
     secEl.textContent = String(s).padStart(2, '0');
-    msEl.textContent  = String(cs).padStart(2, '0');
+    csEl.textContent  = String(cs).padStart(2, '0');
 
     if (s !== lastTick) {
       lastTick = s;
       playTick();
     }
-  }, 16);
+    rafId = requestAnimationFrame(timerLoop);
+  }
+  tickInterval = { cancel: () => { if (rafId) cancelAnimationFrame(rafId); } };
+  rafId = requestAnimationFrame(timerLoop);
 }
 
 function stopGame() {
   if (state !== 'playing') return;
   const elapsed = performance.now() - startTime;
-  clearInterval(tickInterval);
+  tickInterval.cancel();
   tickInterval = null;
   state = 'result';
   showResult(elapsed);
