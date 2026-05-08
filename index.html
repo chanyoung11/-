@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>12초 맞추기</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --accent: #00f5ff;
+      --success: #00ff88;
+      --fail: #ff3366;
+      --bg: #0a0a0f;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: #fff;
+      user-select: none;
+    }
+
+    canvas#bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    #app {
+      position: relative;
+      z-index: 10;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── SCREENS ── */
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      animation: fadeIn 0.4s ease;
+    }
+    .screen.active { display: flex; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    /* ── IDLE SCREEN ── */
+    #screen-idle .title {
+      font-size: clamp(3rem, 10vw, 7rem);
+      font-weight: 900;
+      letter-spacing: -2px;
+      background: linear-gradient(135deg, var(--accent), #7b61ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-align: center;
+      line-height: 1;
+    }
+
+    #screen-idle .subtitle {
+      margin-top: 1rem;
+      font-size: clamp(1rem, 3vw, 1.6rem);
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    #screen-idle .hint {
+      margin-top: 3rem;
+      font-size: clamp(1.2rem, 3.5vw, 2rem);
+      color: rgba(255,255,255,0.8);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+
+    #screen-idle .hint span {
+      display: inline-block;
+      padding: 0.4em 1.2em;
+      border: 2px solid var(--accent);
+      border-radius: 999px;
+      color: var(--accent);
+      letter-spacing: 3px;
+      font-weight: 700;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.97); }
+    }
+
+    /* ── PLAYING SCREEN ── */
+    #screen-playing .big-label {
+      font-size: clamp(1.5rem, 4vw, 2.5rem);
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    #screen-playing .target-time {
+      font-size: clamp(5rem, 18vw, 14rem);
+      font-weight: 900;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--accent), #7b61ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: blur(0px);
+    }
+
+    #screen-playing .target-unit {
+      font-size: clamp(1.5rem, 4vw, 2.5rem);
+      color: rgba(255,255,255,0.4);
+      margin-top: 0.5rem;
+    }
+
+    #screen-playing .stop-hint {
+      margin-top: 3rem;
+      font-size: clamp(1rem, 2.5vw, 1.4rem);
+      color: rgba(255,255,255,0.5);
+      animation: blink 1s step-start infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    /* progress ring */
+    #ring-wrap {
+      position: absolute;
+      pointer-events: none;
+      width: min(70vw, 70vh);
+      height: min(70vw, 70vh);
+    }
+    #ring-wrap svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+    #ring-bg { stroke: rgba(255,255,255,0.06); }
+    #ring-fg {
+      stroke: var(--accent);
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 8px var(--accent));
+      transition: stroke-dashoffset 0.05s linear;
+    }
+
+    /* ── RESULT SCREENS ── */
+    .result-icon {
+      font-size: clamp(4rem, 12vw, 8rem);
+      line-height: 1;
+      margin-bottom: 1rem;
+    }
+
+    .result-title {
+      font-size: clamp(3rem, 9vw, 6rem);
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -1px;
+    }
+
+    #screen-success .result-title {
+      background: linear-gradient(135deg, var(--success), #00e5ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    #screen-fail .result-title {
+      background: linear-gradient(135deg, var(--fail), #ff8800);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .result-time {
+      margin-top: 1.5rem;
+      font-size: clamp(1.5rem, 4vw, 2.5rem);
+      color: rgba(255,255,255,0.7);
+    }
+
+    .result-diff {
+      margin-top: 0.5rem;
+      font-size: clamp(1rem, 3vw, 1.6rem);
+      font-weight: 700;
+    }
+
+    #screen-success .result-diff { color: var(--success); }
+    #screen-fail .result-diff    { color: var(--fail); }
+
+    .retry-btn {
+      margin-top: 3rem;
+      padding: 0.9em 3em;
+      font-size: clamp(1rem, 2.5vw, 1.4rem);
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+
+    .retry-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 30px rgba(255,255,255,0.15);
+    }
+
+    .retry-hint {
+      margin-top: 1rem;
+      font-size: clamp(0.8rem, 2vw, 1rem);
+      color: rgba(255,255,255,0.3);
+    }
+
+    /* success screen flash */
+    #screen-success {
+      animation: successFlash 0.5s ease;
+    }
+    @keyframes successFlash {
+      0%   { background: rgba(0,255,136,0.3); }
+      100% { background: transparent; }
+    }
+
+    /* fail screen shake */
+    .shake {
+      animation: shake 0.5s cubic-bezier(.36,.07,.19,.97);
+    }
+    @keyframes shake {
+      10%, 90%  { transform: translateX(-6px); }
+      20%, 80%  { transform: translateX(8px); }
+      30%, 50%, 70% { transform: translateX(-10px); }
+      40%, 60%  { transform: translateX(10px); }
+    }
+
+    /* particle canvas */
+    #particle-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    /* countdown */
+    #countdown-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      align-items: center;
+      justify-content: center;
+    }
+    #countdown-overlay.active { display: flex; }
+    #countdown-num {
+      font-size: clamp(8rem, 25vw, 18rem);
+      font-weight: 900;
+      color: #fff;
+      animation: countPop 0.5s ease;
+    }
+    @keyframes countPop {
+      0%   { transform: scale(1.6); opacity: 0; }
+      60%  { transform: scale(0.9); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* history bar */
+    #history {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.5rem;
+      z-index: 15;
+    }
+    .hist-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      opacity: 0.8;
+    }
+    .hist-dot.win  { background: var(--success); box-shadow: 0 0 6px var(--success); }
+    .hist-dot.lose { background: var(--fail); box-shadow: 0 0 6px var(--fail); }
+  </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<canvas id="particle-canvas"></canvas>
+
+<div id="countdown-overlay">
+  <div id="countdown-num">3</div>
+</div>
+
+<div id="app">
+
+  <!-- IDLE -->
+  <div id="screen-idle" class="screen active">
+    <div class="title">12초</div>
+    <div class="title" style="font-size:clamp(1.5rem,5vw,3.5rem); margin-top:0.3em; background:linear-gradient(135deg,#fff,rgba(255,255,255,0.4)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">맞추기</div>
+    <div class="subtitle">스페이스바를 눌러 시작</div>
+    <div class="hint"><span>SPACE</span></div>
+  </div>
+
+  <!-- PLAYING -->
+  <div id="screen-playing" class="screen">
+    <div id="ring-wrap">
+      <svg viewBox="0 0 200 200">
+        <circle id="ring-bg" cx="100" cy="100" r="88" fill="none" stroke-width="4"/>
+        <circle id="ring-fg" cx="100" cy="100" r="88" fill="none" stroke-width="4"
+          stroke-dasharray="553" stroke-dashoffset="553"/>
+      </svg>
+    </div>
+    <div class="big-label">목표 시간</div>
+    <div class="target-time">12</div>
+    <div class="target-unit">초</div>
+    <div class="stop-hint">SPACE 를 눌러 멈추세요</div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div id="screen-success" class="screen">
+    <div class="result-icon">🎯</div>
+    <div class="result-title">PERFECT!</div>
+    <div class="result-time" id="success-time"></div>
+    <div class="result-diff" id="success-diff"></div>
+    <button class="retry-btn" onclick="startCountdown()">다시 도전</button>
+    <div class="retry-hint">또는 SPACE 를 눌러 재도전</div>
+  </div>
+
+  <!-- FAIL -->
+  <div id="screen-fail" class="screen">
+    <div class="result-icon" id="fail-icon">💀</div>
+    <div class="result-title">FAIL</div>
+    <div class="result-time" id="fail-time"></div>
+    <div class="result-diff" id="fail-diff"></div>
+    <button class="retry-btn" onclick="startCountdown()">다시 도전</button>
+    <div class="retry-hint">또는 SPACE 를 눌러 재도전</div>
+  </div>
+
+</div>
+
+<div id="history"></div>
+
+<script>
+/* ─────────────────────────────
+   AUDIO ENGINE
+───────────────────────────── */
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+
+function resumeAC() { if (AC.state === 'suspended') AC.resume(); }
+
+function playTick() {
+  resumeAC();
+  const osc = AC.createOscillator();
+  const gain = AC.createGain();
+  osc.connect(gain); gain.connect(AC.destination);
+  osc.frequency.value = 880;
+  osc.type = 'sine';
+  gain.gain.setValueAtTime(0.15, AC.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.06);
+  osc.start(); osc.stop(AC.currentTime + 0.07);
+}
+
+function playStart() {
+  resumeAC();
+  [440, 554, 659].forEach((f, i) => {
+    const osc = AC.createOscillator();
+    const gain = AC.createGain();
+    osc.connect(gain); gain.connect(AC.destination);
+    osc.frequency.value = f;
+    osc.type = 'triangle';
+    const t = AC.currentTime + i * 0.12;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.25, t + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    osc.start(t); osc.stop(t + 0.35);
+  });
+}
+
+function playSuccess() {
+  resumeAC();
+  const notes = [523, 659, 784, 1047];
+  notes.forEach((f, i) => {
+    const osc = AC.createOscillator();
+    const gain = AC.createGain();
+    osc.connect(gain); gain.connect(AC.destination);
+    osc.frequency.value = f;
+    osc.type = 'sine';
+    const t = AC.currentTime + i * 0.1;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.3, t + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    osc.start(t); osc.stop(t + 0.55);
+  });
+}
+
+function playFail() {
+  resumeAC();
+  const osc = AC.createOscillator();
+  const gain = AC.createGain();
+  osc.connect(gain); gain.connect(AC.destination);
+  osc.frequency.value = 220;
+  osc.type = 'sawtooth';
+  gain.gain.setValueAtTime(0.3, AC.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(80, AC.currentTime + 0.4);
+  gain.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.45);
+  osc.start(); osc.stop(AC.currentTime + 0.5);
+}
+
+function playCountBeep(last) {
+  resumeAC();
+  const osc = AC.createOscillator();
+  const gain = AC.createGain();
+  osc.connect(gain); gain.connect(AC.destination);
+  osc.frequency.value = last ? 880 : 440;
+  osc.type = 'sine';
+  gain.gain.setValueAtTime(0.25, AC.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + (last ? 0.4 : 0.15));
+  osc.start(); osc.stop(AC.currentTime + (last ? 0.45 : 0.2));
+}
+
+/* ─────────────────────────────
+   PARTICLE SYSTEM
+───────────────────────────── */
+const pCanvas = document.getElementById('particle-canvas');
+const pCtx = pCanvas.getContext('2d');
+let particles = [];
+
+function resizeParticleCanvas() {
+  pCanvas.width = window.innerWidth;
+  pCanvas.height = window.innerHeight;
+}
+resizeParticleCanvas();
+window.addEventListener('resize', resizeParticleCanvas);
+
+function spawnParticles(x, y, color, count = 80) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 4 + Math.random() * 10;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 4,
+      life: 1,
+      decay: 0.015 + Math.random() * 0.02,
+      radius: 3 + Math.random() * 6,
+      color,
+    });
+  }
+}
+
+function spawnFailParticles() {
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+  spawnParticles(cx, cy, '#ff3366', 60);
+}
+
+function animateParticles() {
+  pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+  particles = particles.filter(p => p.life > 0);
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.25;
+    p.life -= p.decay;
+    pCtx.globalAlpha = p.life;
+    pCtx.fillStyle = p.color;
+    pCtx.beginPath();
+    pCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    pCtx.fill();
+  }
+  pCtx.globalAlpha = 1;
+  requestAnimationFrame(animateParticles);
+}
+animateParticles();
+
+/* ─────────────────────────────
+   BG CANVAS (floating orbs)
+───────────────────────────── */
+const bgCanvas = document.getElementById('bg-canvas');
+const bgCtx = bgCanvas.getContext('2d');
+let orbs = [];
+
+function resizeBgCanvas() {
+  bgCanvas.width = window.innerWidth;
+  bgCanvas.height = window.innerHeight;
+  initOrbs();
+}
+
+function initOrbs() {
+  orbs = [];
+  for (let i = 0; i < 6; i++) {
+    orbs.push({
+      x: Math.random() * bgCanvas.width,
+      y: Math.random() * bgCanvas.height,
+      r: 80 + Math.random() * 140,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3,
+      hue: 180 + Math.random() * 100,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+}
+
+function animateBg(t) {
+  bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+  // deep bg
+  bgCtx.fillStyle = '#0a0a0f';
+  bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+  for (const o of orbs) {
+    o.x += o.vx;
+    o.y += o.vy;
+    o.phase += 0.005;
+    if (o.x < -o.r) o.x = bgCanvas.width + o.r;
+    if (o.x > bgCanvas.width + o.r) o.x = -o.r;
+    if (o.y < -o.r) o.y = bgCanvas.height + o.r;
+    if (o.y > bgCanvas.height + o.r) o.y = -o.r;
+
+    const alpha = 0.06 + 0.03 * Math.sin(o.phase);
+    const grad = bgCtx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
+    grad.addColorStop(0, `hsla(${o.hue},100%,60%,${alpha})`);
+    grad.addColorStop(1, 'transparent');
+    bgCtx.fillStyle = grad;
+    bgCtx.beginPath();
+    bgCtx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+    bgCtx.fill();
+  }
+  requestAnimationFrame(animateBg);
+}
+resizeBgCanvas();
+window.addEventListener('resize', resizeBgCanvas);
+animateBg(0);
+
+/* ─────────────────────────────
+   GAME STATE
+───────────────────────────── */
+const TARGET = 12000; // ms
+const SUCCESS_WINDOW = 300; // ±0.3s = success (tight!)
+const GOOD_WINDOW = 700;    // ±0.7s = close but not perfect
+
+let state = 'idle'; // idle | countdown | playing | result
+let startTime = null;
+let tickInterval = null;
+let history = [];
+
+const screens = {
+  idle:    document.getElementById('screen-idle'),
+  playing: document.getElementById('screen-playing'),
+  success: document.getElementById('screen-success'),
+  fail:    document.getElementById('screen-fail'),
+};
+
+const ringFg = document.getElementById('ring-fg');
+const CIRCUMFERENCE = 2 * Math.PI * 88; // r=88
+
+function showScreen(name) {
+  Object.entries(screens).forEach(([k, el]) => {
+    el.classList.toggle('active', k === name);
+  });
+}
+
+/* ─────────────────────────────
+   RING PROGRESS
+───────────────────────────── */
+function updateRing(ms) {
+  const progress = Math.min(ms / TARGET, 1);
+  const offset = CIRCUMFERENCE * (1 - progress);
+  ringFg.style.strokeDashoffset = offset;
+
+  // color shift: cyan → yellow → red as you pass 12s
+  if (progress < 0.8) {
+    ringFg.style.stroke = 'var(--accent)';
+  } else if (progress < 1) {
+    ringFg.style.stroke = '#ffcc00';
+  } else {
+    ringFg.style.stroke = 'var(--fail)';
+  }
+}
+
+/* ─────────────────────────────
+   COUNTDOWN
+───────────────────────────── */
+const countdownOverlay = document.getElementById('countdown-overlay');
+const countdownNum = document.getElementById('countdown-num');
+
+function startCountdown() {
+  resumeAC();
+  state = 'countdown';
+  showScreen('idle'); // hide all result screens during countdown
+  countdownOverlay.classList.add('active');
+  let n = 3;
+  countdownNum.textContent = n;
+  playCountBeep(false);
+
+  const iv = setInterval(() => {
+    n--;
+    if (n === 0) {
+      clearInterval(iv);
+      countdownNum.textContent = 'GO!';
+      playCountBeep(true);
+      setTimeout(() => {
+        countdownOverlay.classList.remove('active');
+        startGame();
+      }, 600);
+    } else {
+      countdownNum.textContent = n;
+      // re-trigger pop animation
+      countdownNum.style.animation = 'none';
+      void countdownNum.offsetWidth;
+      countdownNum.style.animation = '';
+      playCountBeep(false);
+    }
+  }, 800);
+}
+
+/* ─────────────────────────────
+   GAME LOGIC
+───────────────────────────── */
+function startGame() {
+  state = 'playing';
+  startTime = performance.now();
+  showScreen('playing');
+  ringFg.style.strokeDashoffset = CIRCUMFERENCE;
+  playStart();
+
+  let lastTick = 0;
+  tickInterval = setInterval(() => {
+    const elapsed = performance.now() - startTime;
+    updateRing(elapsed);
+
+    const sec = Math.floor(elapsed / 1000);
+    if (sec !== lastTick) {
+      lastTick = sec;
+      playTick();
+    }
+  }, 50);
+}
+
+function stopGame() {
+  if (state !== 'playing') return;
+  const elapsed = performance.now() - startTime;
+  clearInterval(tickInterval);
+  tickInterval = null;
+  state = 'result';
+  showResult(elapsed);
+}
+
+function showResult(ms) {
+  const diff = ms - TARGET;
+  const absDiff = Math.abs(diff);
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+
+  const timeStr = (ms / 1000).toFixed(3) + '초';
+  const diffStr = (diff > 0 ? '+' : '') + (diff / 1000).toFixed(3) + '초';
+
+  const isSuccess = absDiff <= SUCCESS_WINDOW;
+
+  history.push(isSuccess ? 'win' : 'lose');
+  updateHistory();
+
+  if (isSuccess) {
+    document.getElementById('success-time').textContent = '기록: ' + timeStr;
+    document.getElementById('success-diff').textContent = '오차: ' + diffStr;
+    showScreen('success');
+    playSuccess();
+    // confetti burst
+    const colors = ['#00ff88','#00e5ff','#7b61ff','#ffcc00','#fff'];
+    for (let i = 0; i < 5; i++) {
+      setTimeout(() => {
+        const x = cx + (Math.random() - 0.5) * 300;
+        const y = cy + (Math.random() - 0.5) * 200;
+        spawnParticles(x, y, colors[i % colors.length], 50);
+      }, i * 80);
+    }
+  } else {
+    const early = diff < 0;
+    document.getElementById('fail-time').textContent = '기록: ' + timeStr;
+    document.getElementById('fail-diff').textContent =
+      '오차: ' + diffStr + (early ? ' (너무 빨리!)' : ' (너무 늦게!)');
+    document.getElementById('fail-icon').textContent = early ? '⏩' : '⏰';
+    showScreen('fail');
+    playFail();
+    spawnFailParticles();
+    document.getElementById('screen-fail').classList.remove('shake');
+    void document.getElementById('screen-fail').offsetWidth;
+    document.getElementById('screen-fail').classList.add('shake');
+  }
+}
+
+function updateHistory() {
+  const el = document.getElementById('history');
+  el.innerHTML = history.slice(-20).map(r =>
+    `<div class="hist-dot ${r}"></div>`
+  ).join('');
+}
+
+/* ─────────────────────────────
+   INPUT
+───────────────────────────── */
+function handleInput() {
+  resumeAC();
+  if (state === 'idle') {
+    startCountdown();
+  } else if (state === 'playing') {
+    stopGame();
+  } else if (state === 'result') {
+    startCountdown();
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (state !== 'countdown') handleInput();
+  }
+});
+
+document.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (state !== 'countdown') handleInput();
+}, { passive: false });
+
+document.addEventListener('click', (e) => {
+  if (e.target.tagName === 'BUTTON') return;
+  if (state !== 'countdown') handleInput();
+});
+</script>
+</body>
+</html>
