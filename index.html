@@ -385,6 +385,18 @@ const AC = new (window.AudioContext || window.webkitAudioContext)();
 
 function resumeAC() { if (AC.state === 'suspended') AC.resume(); }
 
+function playBuzzer() {
+  resumeAC();
+  const osc = AC.createOscillator();
+  const gain = AC.createGain();
+  osc.connect(gain); gain.connect(AC.destination);
+  osc.frequency.value = 660;
+  osc.type = 'square';
+  gain.gain.setValueAtTime(0.2, AC.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.08);
+  osc.start(); osc.stop(AC.currentTime + 0.09);
+}
+
 function playTick() {
   resumeAC();
   const osc = AC.createOscillator();
@@ -705,10 +717,8 @@ function showResult(ms) {
   const timeStr = (ms / 1000).toFixed(3) + '초';
   const diffStr = (diff > 0 ? '+' : '') + (diff / 1000).toFixed(3) + '초';
 
-  // 화면에 표시되는 값이 12.00일 때만 성공 (Math.floor 기준)
-  const dispSec = Math.floor(ms / 1000);
-  const dispCs  = Math.floor((ms % 1000) / 10);
-  const isSuccess = dispSec === 12 && dispCs === 0;
+  // 성공 범위: 11.990 ~ 12.010초
+  const isSuccess = ms >= 11990 && ms < 12010;
 
   history.push(isSuccess ? 'win' : 'lose');
   updateHistory();
@@ -754,6 +764,7 @@ function updateHistory() {
 ───────────────────────────── */
 function handleInput() {
   resumeAC();
+  playBuzzer();
   if (state === 'idle') {
     startCountdown();
   } else if (state === 'playing') {
