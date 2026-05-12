@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>12초 맞추기</title>
+  <title>7초 맞추기</title>
   <style>
     * {
       margin: 0;
@@ -332,7 +332,7 @@
 
   <!-- IDLE -->
   <div id="screen-idle" class="screen active">
-    <div class="title">12초</div>
+    <div class="title">7초</div>
     <div class="title" style="font-size:clamp(1.5rem,5vw,3.5rem); margin-top:0.3em; background:linear-gradient(135deg,#fff,rgba(255,255,255,0.4)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">맞추기</div>
     <div class="subtitle">스페이스바를 눌러 시작</div>
     <div class="hint"><span>SPACE</span></div>
@@ -347,7 +347,7 @@
           stroke-dasharray="553" stroke-dashoffset="553"/>
       </svg>
     </div>
-    <div class="big-label">목표 시간 — 12.00초</div>
+    <div class="big-label">목표 시간 — 7.00초</div>
     <div id="live-timer"><span id="timer-sec">00</span><span id="timer-dot">.</span><span id="timer-cs">00</span></div>
     <div class="target-unit">초</div>
     <div class="stop-hint">SPACE 를 눌러 멈추세요</div>
@@ -387,14 +387,48 @@ function resumeAC() { if (AC.state === 'suspended') AC.resume(); }
 
 function playBuzzer() {
   resumeAC();
-  const osc = AC.createOscillator();
-  const gain = AC.createGain();
-  osc.connect(gain); gain.connect(AC.destination);
-  osc.frequency.value = 660;
-  osc.type = 'square';
-  gain.gain.setValueAtTime(0.2, AC.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.08);
-  osc.start(); osc.stop(AC.currentTime + 0.09);
+  const t = AC.currentTime;
+
+  // 노이즈 버퍼 (기계음 질감)
+  const bufLen = AC.sampleRate * 0.18;
+  const buf = AC.createBuffer(1, bufLen, AC.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
+  const noise = AC.createBufferSource();
+  noise.buffer = buf;
+
+  // 밴드패스 — 기계 버저 대역
+  const bp = AC.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 900;
+  bp.Q.value = 0.6;
+
+  // 하드 클리퍼 느낌 — 웨이브쉐이퍼
+  const ws = AC.createWaveShaper();
+  const curve = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const x = (i * 2) / 256 - 1;
+    curve[i] = Math.max(-0.7, Math.min(0.7, x * 4));
+  }
+  ws.curve = curve;
+
+  const gainN = AC.createGain();
+  gainN.gain.setValueAtTime(0.55, t);
+  gainN.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+
+  noise.connect(bp); bp.connect(ws); ws.connect(gainN); gainN.connect(AC.destination);
+  noise.start(t); noise.stop(t + 0.19);
+
+  // 저주파 클릭 (기계적 타격감)
+  const click = AC.createOscillator();
+  const clickGain = AC.createGain();
+  click.type = 'square';
+  click.frequency.setValueAtTime(180, t);
+  click.frequency.exponentialRampToValueAtTime(60, t + 0.05);
+  clickGain.gain.setValueAtTime(0.4, t);
+  clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+  click.connect(clickGain); clickGain.connect(AC.destination);
+  click.start(t); click.stop(t + 0.07);
 }
 
 function playTick() {
@@ -407,6 +441,27 @@ function playTick() {
   gain.gain.setValueAtTime(0.15, AC.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.06);
   osc.start(); osc.stop(AC.currentTime + 0.07);
+}
+
+function playHeartbeat() {
+  resumeAC();
+  const t = AC.currentTime;
+
+  function thump(offset, freq, vol) {
+    const osc = AC.createOscillator();
+    const g = AC.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t + offset);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.4, t + offset + 0.12);
+    g.gain.setValueAtTime(0, t + offset);
+    g.gain.linearRampToValueAtTime(vol, t + offset + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.13);
+    osc.connect(g); g.connect(AC.destination);
+    osc.start(t + offset); osc.stop(t + offset + 0.14);
+  }
+  // "두근" — 두 번 연타
+  thump(0,    90, 0.45);
+  thump(0.13, 70, 0.3);
 }
 
 function playStart() {
@@ -583,12 +638,13 @@ animateBg(0);
 /* ─────────────────────────────
    GAME STATE
 ───────────────────────────── */
-const TARGET = 12000; // ms
-// 성공 조건: 화면에 12.00이 표시될 때 (12.000 ~ 12.009초)
+const TARGET = 7000; // ms
+// 성공 조건: 6.990 ~ 7.010초
 
 let state = 'idle'; // idle | countdown | playing | result
 let startTime = null;
 let tickInterval = null;
+let heartbeatInterval = null;
 let history = [];
 
 const screens = {
@@ -678,6 +734,18 @@ function startGame() {
   let lastTick = 0;
   let rafId = null;
 
+  // heartbeat — 박동 간격: 처음엔 750ms, 7초 가까워질수록 점점 빠르게
+  let hbDelay = 750;
+  function scheduleHeartbeat() {
+    if (state !== 'playing') return;
+    playHeartbeat();
+    const elapsed = performance.now() - startTime;
+    const progress = Math.min(elapsed / TARGET, 1);
+    hbDelay = 750 - progress * 400; // 750ms → 350ms
+    heartbeatInterval = setTimeout(scheduleHeartbeat, hbDelay);
+  }
+  heartbeatInterval = setTimeout(scheduleHeartbeat, 400);
+
   function timerLoop() {
     if (state !== 'playing') return;
     const elapsed = performance.now() - startTime;
@@ -691,11 +759,13 @@ function startGame() {
 
     if (s !== lastTick) {
       lastTick = s;
-      playTick();
     }
     rafId = requestAnimationFrame(timerLoop);
   }
-  tickInterval = { cancel: () => { if (rafId) cancelAnimationFrame(rafId); } };
+  tickInterval = { cancel: () => {
+    if (rafId) cancelAnimationFrame(rafId);
+    if (heartbeatInterval) clearTimeout(heartbeatInterval);
+  }};
   rafId = requestAnimationFrame(timerLoop);
 }
 
@@ -717,8 +787,8 @@ function showResult(ms) {
   const timeStr = (ms / 1000).toFixed(3) + '초';
   const diffStr = (diff > 0 ? '+' : '') + (diff / 1000).toFixed(3) + '초';
 
-  // 성공 범위: 11.990 ~ 12.010초
-  const isSuccess = ms >= 11990 && ms < 12010;
+  // 성공 범위: 6.990 ~ 7.010초
+  const isSuccess = ms >= 6990 && ms < 7010;
 
   history.push(isSuccess ? 'win' : 'lose');
   updateHistory();
