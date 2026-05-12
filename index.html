@@ -390,7 +390,7 @@ function playBuzzer() {
   const t = AC.currentTime;
 
   // 노이즈 버퍼 (기계음 질감)
-  const bufLen = AC.sampleRate * 0.18;
+  const bufLen = Math.floor(AC.sampleRate * 0.18);
   const buf = AC.createBuffer(1, bufLen, AC.sampleRate);
   const data = buf.getChannelData(0);
   for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
